@@ -3,9 +3,26 @@
 #include <cassert>
 #include <algorithm>
 #include <unordered_set>
+#include <format>
+
 #include "helpers/string_conversions.h"
+#include "helpers/error_message.h"
 
 namespace {
+
+    template<typename T>
+    class defer {
+    public:
+        explicit defer(T&& cb): _cb(std::forward<T>(cb)){}
+        defer(const defer&) = delete;
+        defer(defer&&) = delete;
+
+        ~defer() {
+            _cb();
+        }
+    private:
+        T&& _cb;
+    };
 
     constexpr std::uint32_t DEFAULT_NON_SCALED_DPI = 96;
 
@@ -122,9 +139,9 @@ namespace {
         return result;
     }
 
-    void write_to_file(HANDLE handle, const void* data, std::size_t sizeOfData) {
+    BOOL write_to_file(HANDLE handle, const void* data, std::size_t sizeOfData) {
         DWORD dwBytesWritten;
-        ::WriteFile(handle, data, sizeOfData, &dwBytesWritten, nullptr);
+        return ::WriteFile(handle, data, sizeOfData, &dwBytesWritten, nullptr);
     }
 
     constexpr wchar_t APP_NAME[] = L"Scratchpad4k";
@@ -247,8 +264,73 @@ namespace w {
     }
 
     void MainWindow::on_save_content_command() noexcept {
-        [[maybe_unused]]
-        const std::wstring content = get_window_text(_contentEditWnd);
+        std::wstring buffer{};
+        buffer.resize(33 * 1024); // TODO: use preperly calculated max size
+
+        OPENFILENAMEW saveFileDialogSettings{ 0 };
+        saveFileDialogSettings.lStructSize = sizeof(OPENFILENAMEW);
+        saveFileDialogSettings.hwndOwner = _mainWnd;
+        saveFileDialogSettings.lpstrFile = buffer.data();
+        saveFileDialogSettings.nMaxFile = buffer.size();
+        saveFileDialogSettings.Flags = OFN_DONTADDTORECENT | OFN_FORCESHOWHIDDEN | OFN_LONGNAMES | OFN_NOTESTFILECREATE;
+
+        if (not ::GetSaveFileNameW(&saveFileDialogSettings)) {
+
+            const DWORD err = CommDlgExtendedError();
+            if (const bool isCancelled = (err == 0); isCancelled) {
+                return;
+            }
+
+            const std::wstring errorMessage = std::format(L"Extended error code : {}.", err);
+            ::MessageBoxW(_mainWnd, errorMessage.c_str(), L"::GetSaveFileNameW() failed", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        //resize the file name buffer to exact content size
+        for (std::size_t i = saveFileDialogSettings.nFileOffset; i < buffer.size(); ++i) {
+            if (buffer[i] == 0) {
+                buffer.resize(i);
+                break;
+            }
+        }
+
+        if (buffer.size() >= MAX_PATH) {
+            buffer.insert(0, L"\\\\?\\");
+        }
+
+        HANDLE hFile = ::CreateFileW(
+            buffer.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ,
+            nullptr,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr
+        );
+        if (hFile == INVALID_HANDLE_VALUE) {
+            const DWORD lastError = ::GetLastError();
+            const auto errorDescription = helpers::get_error_message_w(lastError);
+            const std::wstring errorMessage = std::format(L"{}(error code = {})", errorDescription.get(), lastError);
+            return;
+        }
+
+        defer autoCloseFile{
+            [&hFile]() {
+                ::CloseHandle(hFile);
+                hFile = nullptr;
+            }
+        };
+
+        const std::string contentInUtf8Encoding = helpers::to_string(get_window_text(_contentEditWnd));
+
+        if (not write_to_file(hFile, contentInUtf8Encoding.data(), contentInUtf8Encoding.size())) {
+            const DWORD lastError = ::GetLastError();
+            const auto errorDescription = helpers::get_error_message_w(lastError);
+            const std::wstring errorMessage = std::format(L"{}(error code = {})", errorDescription.get(), lastError);
+            return;
+        }
+
+
     }
 
     void MainWindow::on_content_changed() noexcept{
@@ -359,7 +441,7 @@ namespace w {
         }
 
         if (is_button_down(VK_CONTROL)){
-            if ( (wParam == VK_RETURN) or (wParam == 'S')) {
+            if (wParam == 'S') {
                 if (message == WM_KEYUP) {
                     on_save_content_command();
                     return true;

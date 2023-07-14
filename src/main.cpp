@@ -7,7 +7,6 @@
 #include <cassert>
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR /*lpCmdLine*/, int /*nCmdShow*/){
-
     ::SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
     using namespace w;
