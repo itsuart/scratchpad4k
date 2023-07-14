@@ -430,12 +430,16 @@ namespace w {
         const auto wParam = msg.wParam;
         const auto lParam = msg.lParam;
 
+        if (const bool isOneOfMyWindows = (msg.hwnd == _mainWnd or msg.hwnd == _contentEditWnd); not isOneOfMyWindows) {
+            return false; // not my window, don't care.
+        }
+
         //intercept all C+ENTER
         if (message != WM_KEYUP and message != WM_KEYDOWN) {
             return false;
         }
 
-        if (wParam == VK_ESCAPE) {
+        if (wParam == VK_ESCAPE and message == WM_KEYDOWN) {
             ::PostQuitMessage(0);
             return true;
         }
@@ -452,7 +456,7 @@ namespace w {
             }
             else if (wParam == 'A') {
                 if (message == WM_KEYUP) {
-                    ::SendMessageW(_contentEditWnd, EM_SETSEL, 0, -1);
+                    ::PostMessageW(_contentEditWnd, EM_SETSEL, 0, -1);
                     return true;
                 }
                 else if (message == WM_KEYDOWN) {
