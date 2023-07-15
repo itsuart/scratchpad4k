@@ -145,6 +145,7 @@ namespace {
     }
 
     constexpr wchar_t APP_NAME[] = L"Scratchpad4k";
+    constexpr wchar_t APP_NAME_EMPTY[] = L"Scratchpad4k (empty)";
 
 } // namespace
 
@@ -339,10 +340,11 @@ namespace w {
         //TODO: append "({} wchars)" or "(empty)" ?
         //TODO: also optimize, to many copying back and forth.
         if (content.empty()) {
-            ::SetWindowTextW(_mainWnd, APP_NAME);
+            ::SetWindowTextW(_mainWnd, APP_NAME_EMPTY);
             return;
         }
 
+        const std::size_t contentSize = content.size();
         {
             std:size_t offset{ 0 };
             for (wchar_t c : content) {
@@ -355,7 +357,7 @@ namespace w {
         
         }
 
-        content.append(L" -- ").append(APP_NAME);
+        content.append(std::format(L" -- {} ({} wchars)", APP_NAME, contentSize));
         ::SetWindowTextW(_mainWnd, content.c_str());
     }
 
