@@ -9,6 +9,7 @@
 #include "helpers/error_message.h"
 
 namespace {
+    using namespace std::string_view_literals;
 
     template<typename T>
     class defer {
@@ -265,14 +266,31 @@ namespace w {
     }
 
     void MainWindow::on_save_content_command() noexcept {
+        constexpr std::size_t SUGGESTED_FILE_NAME_MAX_LENGTH = 100;
+
         std::wstring buffer{};
         buffer.resize(33 * 1024); // TODO: use preperly calculated max size
+
+        const std::wstring content = get_window_text(_contentEditWnd);
+        { //suggest the name of a file
+            std::size_t stopPos = 0;
+            for (; stopPos < (std::min)(SUGGESTED_FILE_NAME_MAX_LENGTH, content.size()); ++stopPos) {
+                const wchar_t currentChar = content[stopPos];
+                if (currentChar == L'\r' or currentChar == L'\n') {
+                    break;
+                }
+            }
+
+            std::memcpy(buffer.data(), content.data(), sizeof(wchar_t) * stopPos);
+        }
+        
 
         OPENFILENAMEW saveFileDialogSettings{ 0 };
         saveFileDialogSettings.lStructSize = sizeof(OPENFILENAMEW);
         saveFileDialogSettings.hwndOwner = _mainWnd;
         saveFileDialogSettings.lpstrFile = buffer.data();
         saveFileDialogSettings.nMaxFile = buffer.size();
+        saveFileDialogSettings.lpstrFileTitle;
         saveFileDialogSettings.Flags = OFN_DONTADDTORECENT | OFN_FORCESHOWHIDDEN | OFN_LONGNAMES | OFN_NOTESTFILECREATE;
 
         if (not ::GetSaveFileNameW(&saveFileDialogSettings)) {
@@ -295,8 +313,8 @@ namespace w {
             }
         }
 
-        if (buffer.size() >= MAX_PATH) {
-            buffer.insert(0, L"\\\\?\\");
+        if (buffer.size() >= MAX_PATH and (not buffer.starts_with(L"\\\\?\\"sv)) ){
+            buffer.insert(0, L"\\\\?\\"sv);
         }
 
         HANDLE hFile = ::CreateFileW(
@@ -322,7 +340,7 @@ namespace w {
             }
         };
 
-        const std::string contentInUtf8Encoding = helpers::to_string(get_window_text(_contentEditWnd));
+        const std::string contentInUtf8Encoding = helpers::to_string(content);
 
         if (not write_to_file(hFile, contentInUtf8Encoding.data(), contentInUtf8Encoding.size())) {
             const DWORD lastError = ::GetLastError();
@@ -337,7 +355,6 @@ namespace w {
     void MainWindow::on_content_changed() noexcept{
         std::wstring content = get_window_text(_contentEditWnd);
 
-        //TODO: append "({} wchars)" or "(empty)" ?
         //TODO: also optimize, to many copying back and forth.
         if (content.empty()) {
             ::SetWindowTextW(_mainWnd, APP_NAME_EMPTY);
