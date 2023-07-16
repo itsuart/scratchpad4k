@@ -182,12 +182,15 @@ namespace w {
 
         dispatcher.bind_to_next_new_window(*this);
 
+        constexpr uint32_t INITIAL_WIDTH = 800;
+        constexpr uint32_t INITIAL_HEIGHT = 600;
+
         _mainWnd = CreateWindowW(
             WND_CLASS_NAME,
             APP_NAME,
             WS_OVERLAPPEDWINDOW,
             0, 0,
-            to_dpi_aware_pixels(300), to_dpi_aware_pixels(300),
+            to_dpi_aware_pixels(INITIAL_WIDTH), to_dpi_aware_pixels(INITIAL_HEIGHT),
             nullptr,
             nullptr,
             _hInstance,
