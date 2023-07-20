@@ -3,6 +3,8 @@
 #
 cmake_minimum_required (VERSION 3.20)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 
 # Enable Hot Reload for MSVC compilers if supported.
 if (POLICY CMP0141)
