@@ -1,7 +1,11 @@
 #pragma once
-#include <Windows.h>
-#include <vector>
+#include <cstdint>
 #include <string>
+
+#define NOMINMAX
+#include <Windows.h>
+#undef NOMINMAX
+
 #include "./window_msg_dispatcher.h"
 
 namespace w {
@@ -29,10 +33,15 @@ namespace w {
         std::uint32_t to_dpi_aware_pixels(std::uint32_t defaultDPIPixels) const noexcept;
 
     private:
-        HINSTANCE _hInstance;
+        std::wstring m_bufferForContent{};
+        std::wstring m_bufferForStats{};
 
-        HWND _mainWnd;
-        HWND _contentEditWnd;
-        std::uint32_t _dpi;
+        HINSTANCE m_hInstance;
+
+        HWND m_mainWnd;
+        HWND m_contentEditWnd;
+        HWND m_statsEditWnd;
+
+        std::uint32_t m_dpi;
     };
 } //namespace

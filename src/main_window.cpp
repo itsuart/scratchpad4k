@@ -2,14 +2,105 @@
 #include <stdexcept>
 #include <cassert>
 #include <algorithm>
-#include <unordered_set>
+#include <cwctype>
 #include <format>
+#include <vector>
 
 #include "helpers/string_conversions.h"
 #include "helpers/error_message.h"
 
 namespace {
     using namespace std::string_view_literals;
+
+    struct Statistics final {
+        std::uint64_t min;
+        std::uint64_t max;
+        std::uint64_t nNumbers;
+        std::uint64_t average;
+        std::uint64_t maxDeviation;
+
+        [[nodiscard]]
+        static Statistics from_string(std::wstring_view content) noexcept {
+            struct Parser final {
+                Statistics parse(std::wstring_view content) noexcept {
+                    while (not content.empty()) {
+                        content = skip_non_digits(content);
+
+                        std::size_t digitCharsSkipped{0};
+
+                        std::uint64_t currentNumber{0};
+                        for (const wchar_t maybeDigitChar : content) {
+                            if (std::iswdigit(maybeDigitChar)) {
+                                currentNumber *= 10;
+                                currentNumber += maybeDigitChar - L'0';
+                                
+                                digitCharsSkipped += 1;
+                            }
+                            else {
+                                break;
+                            }
+                        }
+
+                        if (digitCharsSkipped != 0) {
+                            on_new_number(currentNumber);
+                            content = content.substr(digitCharsSkipped);
+                        }
+                    }
+
+                    Statistics result{};
+                    if (nNumbers >= 2) {
+                        const std::uint64_t average = std::round( (double)sum / nNumbers);
+
+                        result.min = min;
+                        result.max = max;
+                        result.nNumbers = nNumbers;
+                        result.average = average;
+                        result.maxDeviation = std::max(max - average, average - min);
+                    }
+
+                    return result;
+                }
+
+                static std::wstring_view skip_non_digits(std::wstring_view content) noexcept {
+                    std::size_t skipped{0};
+                    for (const wchar_t c : content) {
+                        if (std::iswdigit(c)) {
+                            break;
+                        }
+                        skipped += 1;
+                    }
+
+                    return content.substr(skipped);
+                }
+
+            private:
+                void on_new_number(std::uint64_t newNumber) noexcept {
+                    nNumbers += 1;
+                    min = std::min(min, newNumber);
+                    max = std::max(max, newNumber);
+                    sum += newNumber;
+                }
+
+            private:
+                std::uint64_t min{ std::numeric_limits<std::uint64_t>::max() };
+                std::uint64_t max{ std::numeric_limits<std::uint64_t>::min() };
+                std::uint64_t nNumbers{0};
+                std::uint64_t sum{0};
+            } parser;
+
+            return parser.parse(content);
+        }
+
+        void to_string(std::wstring& buffer) const noexcept {
+            if (nNumbers < 2) {
+                buffer.assign(L"Not enough numbers detected (need at least 2).");
+                return;
+            }
+
+            buffer.clear();
+            std::format_to(std::back_inserter(buffer), L"Avg={} +-{}, Min={}, Max={}, nNumbers={}", average, maxDeviation, min, max, nNumbers);
+        }
+    };
 
     template<typename T>
     class defer {
@@ -153,10 +244,10 @@ namespace {
 namespace w {
 
     MainWindow::MainWindow(WindowMsgDispatcher& dispatcher, HINSTANCE hInstance)
-    : _hInstance(hInstance)
-    , _mainWnd(nullptr)
-    , _contentEditWnd(nullptr)
-    , _dpi(::GetDpiForSystem())
+    : m_hInstance(hInstance)
+    , m_mainWnd(nullptr)
+    , m_contentEditWnd(nullptr)
+    , m_dpi(::GetDpiForSystem())
     {
         const static wchar_t* WND_CLASS_NAME = L"scratchpad4k-main";
 
@@ -169,7 +260,7 @@ namespace w {
             wcex.lpfnWndProc = dispatcher.DispatchingProc;
             wcex.cbClsExtra = 0;
             wcex.cbWndExtra = 0;
-            wcex.hInstance = _hInstance;
+            wcex.hInstance = m_hInstance;
             wcex.hIcon = nullptr;
             wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
             wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
@@ -185,7 +276,7 @@ namespace w {
         constexpr uint32_t INITIAL_WIDTH = 800;
         constexpr uint32_t INITIAL_HEIGHT = 600;
 
-        _mainWnd = CreateWindowW(
+        m_mainWnd = CreateWindowW(
             WND_CLASS_NAME,
             APP_NAME,
             WS_OVERLAPPEDWINDOW,
@@ -193,57 +284,71 @@ namespace w {
             to_dpi_aware_pixels(INITIAL_WIDTH), to_dpi_aware_pixels(INITIAL_HEIGHT),
             nullptr,
             nullptr,
-            _hInstance,
+            m_hInstance,
             nullptr
         );
 
-        if (! _mainWnd) {
+        if (! m_mainWnd) {
             throw std::runtime_error("failed to create main window");
         }
 
-        center_window(_mainWnd);
+        center_window(m_mainWnd);
 
         create_subcontrols();
 
         layout_subcontrols();
 
-        ::ShowWindow(_mainWnd, SW_SHOW);
+        ::ShowWindow(m_mainWnd, SW_SHOW);
 
-        ::UpdateWindow(_mainWnd);
+        ::UpdateWindow(m_mainWnd);
     }
 
     void MainWindow::create_subcontrols() {
-        _contentEditWnd =
+        m_contentEditWnd =
             ::CreateWindowW(
                 L"edit",
                 nullptr,
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_EX_CLIENTEDGE | ES_MULTILINE,
                 0, 0,
                 to_dpi_aware_pixels(100), to_dpi_aware_pixels(200),
-                _mainWnd,
+                m_mainWnd,
                 nullptr,
-                _hInstance,
+                m_hInstance,
                 nullptr
             );
-        assert(_contentEditWnd);
+        assert(m_contentEditWnd);
 
-        {
+        m_statsEditWnd = ::CreateWindowW(
+            L"edit", 
+            nullptr, 
+            WS_CHILD | WS_VISIBLE | WS_EX_CLIENTEDGE | ES_READONLY,
+            0, 0, 
+            to_dpi_aware_pixels(100), to_dpi_aware_pixels(16), 
+            m_mainWnd, 
+            nullptr, 
+            m_hInstance, 
+            nullptr
+        );
+        assert(m_statsEditWnd);
+
+        const HFONT hFont = [dpi=this->m_dpi]{
             NONCLIENTMETRICSW metrics;
             metrics.cbSize = sizeof(metrics);
 
             {
-                const bool getMetrics = ::SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0, _dpi);
+                const bool getMetrics = ::SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0, dpi);
                 assert(getMetrics);
             }
 
             //For some fucking reason, for fonts 72 ppi is the default.
-            metrics.lfMenuFont.lfHeight = 16 * _dpi / 72;
+            metrics.lfMenuFont.lfHeight = 16 * dpi / 72;
             HFONT hFont = ::CreateFontIndirectW(&metrics.lfMenuFont);
             assert(hFont);
-
-            ::SendMessageW(_contentEditWnd, WM_SETFONT, (WPARAM)hFont, false);
-        }
-
+            return hFont;
+        }();
+        
+        ::SendMessageW(m_contentEditWnd, WM_SETFONT, (WPARAM)hFont, false);
+        ::SendMessageW(m_statsEditWnd, WM_SETFONT, (WPARAM)hFont, false);
     }
 
     void MainWindow::layout_subcontrols() {
@@ -251,18 +356,30 @@ namespace w {
         constexpr int RIGHT_PADDING = 0;
         constexpr int TOP_PADDING = 0;
         constexpr int BOTTOM_PADDING = 0;
+        constexpr int STATS_CONTROL_VERTICAL_SPACE = 24;
 
-        RECT clientRect;
-        if (not ::GetClientRect(_mainWnd, &clientRect)) {
+        Rect clientRect;
+        if (not ::GetClientRect(m_mainWnd, &clientRect)) {
             return;
         }
 
+        const auto effectiveStatsWndVerticalSpace = to_dpi_aware_pixels(STATS_CONTROL_VERTICAL_SPACE);
+
         ::MoveWindow(
-            _contentEditWnd,
+            m_contentEditWnd,
             LEFT_PADDING,
             TOP_PADDING,
             clientRect.right - (LEFT_PADDING + RIGHT_PADDING),
-            clientRect.bottom - clientRect.top - (TOP_PADDING + BOTTOM_PADDING),
+            clientRect.bottom - clientRect.top - (TOP_PADDING + BOTTOM_PADDING) - effectiveStatsWndVerticalSpace,
+            false
+        );
+
+        ::MoveWindow(
+            m_statsEditWnd,
+            LEFT_PADDING,
+            TOP_PADDING + clientRect.get_height() - effectiveStatsWndVerticalSpace,
+            clientRect.right - (LEFT_PADDING + RIGHT_PADDING),
+            effectiveStatsWndVerticalSpace,
             false
         );
 
@@ -274,7 +391,7 @@ namespace w {
         std::wstring buffer{};
         buffer.resize(33 * 1024); // TODO: use preperly calculated max size
 
-        const std::wstring content = get_window_text(_contentEditWnd);
+        const std::wstring content = get_window_text(m_contentEditWnd);
         { //suggest the name of a file
             std::size_t stopPos = 0;
             for (; stopPos < (std::min)(SUGGESTED_FILE_NAME_MAX_LENGTH, content.size()); ++stopPos) {
@@ -290,7 +407,7 @@ namespace w {
 
         OPENFILENAMEW saveFileDialogSettings{ 0 };
         saveFileDialogSettings.lStructSize = sizeof(OPENFILENAMEW);
-        saveFileDialogSettings.hwndOwner = _mainWnd;
+        saveFileDialogSettings.hwndOwner = m_mainWnd;
         saveFileDialogSettings.lpstrFile = buffer.data();
         saveFileDialogSettings.nMaxFile = buffer.size();
         saveFileDialogSettings.lpstrFileTitle;
@@ -304,7 +421,7 @@ namespace w {
             }
 
             const std::wstring errorMessage = std::format(L"Extended error code : {}.", err);
-            ::MessageBoxW(_mainWnd, errorMessage.c_str(), L"::GetSaveFileNameW() failed", MB_OK | MB_ICONERROR);
+            ::MessageBoxW(m_mainWnd, errorMessage.c_str(), L"::GetSaveFileNameW() failed", MB_OK | MB_ICONERROR);
             return;
         }
 
@@ -356,20 +473,25 @@ namespace w {
     }
 
     void MainWindow::on_content_changed() noexcept{
-        std::wstring content = get_window_text(_contentEditWnd);
+        m_bufferForContent.clear();
+        get_window_text(m_contentEditWnd, m_bufferForContent);
 
         //TODO: also optimize, to many copying back and forth.
-        if (content.empty()) {
-            ::SetWindowTextW(_mainWnd, APP_NAME_EMPTY);
+        if (m_bufferForContent.empty()) {
+            ::SetWindowTextW(m_mainWnd, APP_NAME_EMPTY);
             return;
         }
 
-        const std::size_t contentSize = content.size();
+        const Statistics numberStats = Statistics::from_string(m_bufferForContent);
+        numberStats.to_string(m_bufferForStats);
+        ::SetWindowTextW(m_statsEditWnd, m_bufferForStats.c_str());
+
+        const std::size_t contentSize = m_bufferForContent.size();
         {
             std:size_t offset{ 0 };
-            for (wchar_t c : content) {
+            for (wchar_t c : m_bufferForContent) {
                 if (c == L'\n' or c == L'\r') {
-                    content.erase(offset);
+                    m_bufferForContent.erase(offset);
                     break;
                 }
                 ++offset;
@@ -377,19 +499,19 @@ namespace w {
         
         }
 
-        content.append(std::format(L" -- {} ({} wchars)", APP_NAME, contentSize));
-        ::SetWindowTextW(_mainWnd, content.c_str());
+        m_bufferForContent.append(std::format(L" -- {} ({} wchars)", APP_NAME, contentSize));
+        ::SetWindowTextW(m_mainWnd, m_bufferForContent.c_str());
     }
 
     void MainWindow::on_dpi_changed(std::uint32_t newDPI, const RECT* suggestedNewRect) noexcept{
-        _dpi = newDPI;
+        m_dpi = newDPI;
 
         const Rect& rect{ *suggestedNewRect };
-        ::SetWindowPos(_mainWnd, nullptr, rect.left, rect.top, rect.get_width(), rect.get_height(), SWP_NOZORDER | SWP_NOACTIVATE);
+        ::SetWindowPos(m_mainWnd, nullptr, rect.left, rect.top, rect.get_width(), rect.get_height(), SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     std::uint32_t MainWindow::to_dpi_aware_pixels(std::uint32_t defaultDPIPixels) const noexcept{
-        return static_cast<std::uint32_t>(static_cast<std::uint64_t>(defaultDPIPixels) * _dpi / DEFAULT_NON_SCALED_DPI);
+        return static_cast<std::uint32_t>(static_cast<std::uint64_t>(defaultDPIPixels) * m_dpi / DEFAULT_NON_SCALED_DPI);
     }
 
     LRESULT MainWindow::process_message(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
@@ -403,8 +525,8 @@ namespace w {
 
             case WM_SIZING: {
                 Rect& r = *(Rect*)lParam;
-                const long effectiveWidth = (std::max)(r.get_width(), (LONG)to_dpi_aware_pixels(200));
-                const long effectiveHeight = (std::max)(r.get_height(), (LONG)to_dpi_aware_pixels(100));
+                const long effectiveWidth = (std::max)(r.get_width(), (LONG)to_dpi_aware_pixels(400));
+                const long effectiveHeight = (std::max)(r.get_height(), (LONG)to_dpi_aware_pixels(200));
                 r.bottom = r.top + effectiveHeight;
                 r.right = r.left + effectiveWidth;
                 return true;
@@ -419,7 +541,7 @@ namespace w {
 
             case WM_ACTIVATE: {
                 if (LOWORD(wParam) != WA_INACTIVE) {
-                    ::SetFocus(_contentEditWnd);
+                    ::SetFocus(m_contentEditWnd);
                     return MESSAGE_PROCESSED;
                 }
             } break;
@@ -432,7 +554,7 @@ namespace w {
             } break;
 
             case WM_COMMAND: {
-                if (lParam == (LPARAM)_contentEditWnd) {
+                if (lParam == (LPARAM)m_contentEditWnd) {
                     const auto notificationCode = HIWORD(wParam);
                     if (notificationCode == EN_UPDATE) {
                         on_content_changed();
@@ -452,9 +574,9 @@ namespace w {
         const auto wParam = msg.wParam;
         const auto lParam = msg.lParam;
 
-        if (const bool isOneOfMyWindows = (msg.hwnd == _mainWnd or msg.hwnd == _contentEditWnd); not isOneOfMyWindows) {
-            return false; // not my window, don't care.
-        }
+        //if (const bool isOneOfMyWindows = (msg.hwnd == m_mainWnd or msg.hwnd == m_contentEditWnd or msg.hwnd == m_statsEditWnd); not isOneOfMyWindows) {
+        //    return false; // not my window, don't care.
+        //}
 
         //intercept all C+ENTER
         if (message != WM_KEYUP and message != WM_KEYDOWN) {
@@ -464,6 +586,23 @@ namespace w {
         if (wParam == VK_ESCAPE and message == WM_KEYDOWN) {
             ::PostQuitMessage(0);
             return true;
+        }
+
+        if (message == WM_KEYDOWN) {
+            if (wParam == VK_TAB) {
+                const HWND currentFocusedWnd = ::GetFocus();
+                //const bool traverseBackward = is_button_down(VK_SHIFT);
+                if (currentFocusedWnd == m_contentEditWnd) {
+                    ::SetFocus(m_statsEditWnd);
+                    //also automatically select all content of the control (it is readonly, so it's completely safe)
+                    ::PostMessageW(m_statsEditWnd, EM_SETSEL, 0, -1);
+                    return true;
+                }
+                else if (currentFocusedWnd == m_statsEditWnd) {
+                    ::SetFocus(m_contentEditWnd);
+                    return true;
+                }
+            }
         }
 
         if (is_button_down(VK_CONTROL)){
@@ -478,7 +617,8 @@ namespace w {
             }
             else if (wParam == 'A') {
                 if (message == WM_KEYUP) {
-                    ::PostMessageW(_contentEditWnd, EM_SETSEL, 0, -1);
+                    const HWND focusedWnd = ::GetFocus();
+                    ::PostMessageW(focusedWnd, EM_SETSEL, 0, -1);
                     return true;
                 }
                 else if (message == WM_KEYDOWN) {
