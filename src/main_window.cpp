@@ -15,6 +15,7 @@ namespace {
     struct Statistics final {
         std::uint64_t min;
         std::uint64_t max;
+        std::uint64_t sum;
         std::uint64_t nNumbers;
         std::uint64_t average;
         std::uint64_t maxDeviation;
@@ -23,6 +24,9 @@ namespace {
         static Statistics from_string(std::wstring_view content) noexcept {
             struct Parser final {
                 Statistics parse(std::wstring_view content) noexcept {
+                    Statistics result{};
+                    result.min = std::numeric_limits<decltype(min)>::max();
+
                     while (not content.empty()) {
                         content = skip_non_digits(content);
 
@@ -42,20 +46,16 @@ namespace {
                         }
 
                         if (digitCharsSkipped != 0) {
-                            on_new_number(currentNumber);
+                            result.on_new_number(currentNumber);
                             content = content.substr(digitCharsSkipped);
                         }
                     }
 
-                    Statistics result{};
-                    if (nNumbers >= 2) {
-                        const std::uint64_t average = std::round( (double)sum / nNumbers);
-
-                        result.min = min;
-                        result.max = max;
-                        result.nNumbers = nNumbers;
+                    
+                    if (result.nNumbers >= 2) {
+                        const std::uint64_t average = std::round( (double)result.sum / result.nNumbers);
                         result.average = average;
-                        result.maxDeviation = std::max(max - average, average - min);
+                        result.maxDeviation = std::max(result.max - average, average - result.min);
                     }
 
                     return result;
@@ -72,20 +72,6 @@ namespace {
 
                     return content.substr(skipped);
                 }
-
-            private:
-                void on_new_number(std::uint64_t newNumber) noexcept {
-                    nNumbers += 1;
-                    min = std::min(min, newNumber);
-                    max = std::max(max, newNumber);
-                    sum += newNumber;
-                }
-
-            private:
-                std::uint64_t min{ std::numeric_limits<std::uint64_t>::max() };
-                std::uint64_t max{ std::numeric_limits<std::uint64_t>::min() };
-                std::uint64_t nNumbers{0};
-                std::uint64_t sum{0};
             } parser;
 
             return parser.parse(content);
@@ -98,8 +84,17 @@ namespace {
             }
 
             buffer.clear();
-            std::format_to(std::back_inserter(buffer), L"Avg={} +-{}, Min={}, Max={}, nNumbers={}", average, maxDeviation, min, max, nNumbers);
+            std::format_to(std::back_inserter(buffer), L"Avg={} +-{}, Min={}, Max={}, Sum={}, nNumbers={}", average, maxDeviation, min, max, sum, nNumbers);
         }
+
+    private:
+        void on_new_number(std::uint64_t newNumber) noexcept {
+            nNumbers += 1;
+            min = std::min(min, newNumber);
+            max = std::max(max, newNumber);
+            sum += newNumber;
+        }
+
     };
 
     template<typename T>
