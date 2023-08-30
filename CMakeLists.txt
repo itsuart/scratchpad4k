@@ -15,7 +15,19 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 project ("scratchpad4k")
 
 # Add source to this project's executable.
-add_executable (scratchpad4k "src/main.cpp" "src/main_window.cpp" "src/window_msg_dispatcher.cpp" "src/helpers/string_conversions.cpp" "src/helpers/error_message.cpp")
+add_executable (
+	scratchpad4k 
+	"src/main.cpp" 
+	"src/main_window.cpp" 
+	"src/window_msg_dispatcher.cpp" 
+	"src/helpers/string_conversions.cpp" 
+	"src/helpers/error_message.cpp"
+)
+
+if(MSVC)
+	add_compile_options(scratchpad4k "/GR-")
+endif()
+
 
 set_property(TARGET scratchpad4k PROPERTY CXX_STANDARD 20)
 set_property(TARGET scratchpad4k PROPERTY WIN32_EXECUTABLE on)

@@ -211,21 +211,6 @@ namespace {
         return result;
     }
 
-    std::string read_file_fully(HANDLE handle) {
-        static char BUFFER[4 * 1024];
-
-        std::string result;
-        DWORD dwBytesRead;
-        while (::ReadFile(handle, &BUFFER[0], sizeof BUFFER, &dwBytesRead, nullptr)) {
-            result.append(&BUFFER[0], dwBytesRead);
-            if (dwBytesRead == 0) {
-                break;
-            }
-        }
-
-        return result;
-    }
-
     BOOL write_to_file(HANDLE handle, const void* data, std::size_t sizeOfData) {
         DWORD dwBytesWritten;
         return ::WriteFile(handle, data, sizeOfData, &dwBytesWritten, nullptr);
@@ -384,19 +369,29 @@ namespace w {
         constexpr std::size_t SUGGESTED_FILE_NAME_MAX_LENGTH = 100;
 
         std::wstring buffer{};
-        buffer.resize(33 * 1024); // TODO: use preperly calculated max size
+        buffer.resize(33 * 1024); //TODO: put correct max wide path
 
         const std::wstring content = get_window_text(m_contentEditWnd);
         { //suggest the name of a file
-            std::size_t stopPos = 0;
-            for (; stopPos < (std::min)(SUGGESTED_FILE_NAME_MAX_LENGTH, content.size()); ++stopPos) {
+            constexpr std::wstring_view INVALID_CHARACTERS = L"/\\<>:\"|?*"sv;
+            std::size_t writePos = 0;
+            for (std::size_t stopPos = 0; stopPos < (std::min)(SUGGESTED_FILE_NAME_MAX_LENGTH, content.size()); ++stopPos, ++writePos) {
                 const wchar_t currentChar = content[stopPos];
                 if (currentChar == L'\r' or currentChar == L'\n') {
                     break;
                 }
+                else if (INVALID_CHARACTERS.find(currentChar) != std::wstring_view::npos) {
+                    buffer[writePos] = L'!';
+                }
+                else {
+                    buffer[writePos] = currentChar;
+                }
             }
 
-            std::memcpy(buffer.data(), content.data(), sizeof(wchar_t) * stopPos);
+            if (writePos == 0) {
+                constexpr std::wstring_view EMPTY_NAME = L"(empty)"sv;
+                std::memcpy(buffer.data(), EMPTY_NAME.data(), EMPTY_NAME.size() * sizeof(wchar_t));
+            }
         }
         
 
