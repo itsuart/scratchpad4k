@@ -8,19 +8,38 @@ pub const BOOL = win.BOOL;
 pub const DWORD = win.DWORD;
 pub const UINT = win.UINT;
 pub const WCHAR = win.WCHAR;
-pub const WPARAM = win.WPARAM;
+/// Removed from `std.os.windows` in 0.16; defined here.
+pub const WPARAM = usize;
 pub const LPARAM = win.LPARAM;
-pub const LRESULT = win.LRESULT;
+/// Removed from `std.os.windows` in 0.16; defined here (was `LONG_PTR`).
+pub const LRESULT = isize;
 pub const HWND = win.HWND;
 pub const HINSTANCE = win.HINSTANCE;
 pub const HANDLE = win.HANDLE;
 pub const LPWSTR = win.LPWSTR;
 pub const LPCWSTR = win.LPCWSTR;
-pub const RECT = win.RECT;
-pub const POINT = win.POINT;
-pub const HRESULT = win.HRESULT;
+/// Removed from `std.os.windows` in 0.16; defined here (LONG = i32).
+pub const RECT = extern struct {
+    left: win.LONG,
+    top: win.LONG,
+    right: win.LONG,
+    bottom: win.LONG,
+};
+/// Removed from `std.os.windows` in 0.16; defined here (LONG = i32).
+pub const POINT = extern struct {
+    x: win.LONG,
+    y: win.LONG,
+};
+/// Removed from `std.os.windows` in 0.16; defined here.
+pub const HRESULT = c_long;
 pub const MAX_PATH = win.MAX_PATH;
 pub const INVALID_HANDLE_VALUE = win.INVALID_HANDLE_VALUE;
+
+// file access constants (removed from `std.os.windows` in 0.16)
+pub const GENERIC_WRITE = 0x40000000;
+pub const FILE_SHARE_READ = 0x00000001;
+pub const CREATE_ALWAYS = 2;
+pub const FILE_ATTRIBUTE_NORMAL = 0x80;
 
 // ---------------------------------------------------------------- handles
 
@@ -128,6 +147,38 @@ pub const OPENFILENAMEW = extern struct {
     dwReserved: DWORD,
     FlagsEx: DWORD,
 };
+
+// ---------------------------------------------------------------- kernel32
+// Zig 0.16's std no longer ships the raw kernel32 externs we need, so declare
+// them here (ABI-identical to the ones that used to live in `std.os.windows`).
+
+pub extern "kernel32" fn CreateFileW(
+    lpFileName: LPCWSTR,
+    dwDesiredAccess: DWORD,
+    dwShareMode: DWORD,
+    lpSecurityAttributes: ?*win.SECURITY_ATTRIBUTES,
+    dwCreationDisposition: DWORD,
+    dwFlagsAndAttributes: DWORD,
+    hTemplateFile: ?HANDLE,
+) callconv(.winapi) HANDLE;
+
+pub extern "kernel32" fn WriteFile(
+    in_hFile: HANDLE,
+    in_lpBuffer: [*]const u8,
+    in_nNumberOfBytesToWrite: DWORD,
+    out_lpNumberOfBytesWritten: ?*DWORD,
+    in_out_lpOverlapped: ?*anyopaque,
+) callconv(.winapi) BOOL;
+
+pub extern "kernel32" fn FormatMessageW(
+    dwFlags: DWORD,
+    lpSource: ?win.LPCVOID,
+    dwMessageId: win.Win32Error,
+    dwLanguageId: DWORD,
+    lpBuffer: LPWSTR,
+    nSize: DWORD,
+    arguments: ?*anyopaque,
+) callconv(.winapi) DWORD;
 
 // ---------------------------------------------------------------- user32
 

@@ -20,7 +20,7 @@ pub export fn wWinMain(
 
     _ = win32.SetProcessDpiAwareness(win32.PROCESS_PER_MONITOR_DPI_AWARE);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -33,7 +33,7 @@ pub export fn wWinMain(
     defer main_window.deinit();
 
     var msg: win32.MSG = undefined;
-    while (win32.GetMessageW(&msg, null, 0, 0) != 0) {
+    while (win32.GetMessageW(&msg, null, 0, 0).toBool()) {
         if (main_window.previewMessage(&msg)) continue;
         _ = win32.TranslateMessage(&msg);
         _ = win32.DispatchMessageW(&msg);

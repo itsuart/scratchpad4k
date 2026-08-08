@@ -8,7 +8,7 @@ Will never ask "would you like to save content?" on quit. This is by design.
 
 ## Building
 
-Requires [Zig](https://ziglang.org/) 0.15.2.
+Requires [Zig](https://ziglang.org/) 0.16.0.
 
 ```
 zig build          # build (output: zig-out/bin/scratchpad4k.exe)

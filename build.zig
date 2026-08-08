@@ -14,12 +14,13 @@ pub fn build(b: *std.Build) void {
     });
 
     // GUI application: no console window attached.
-    exe.subsystem = .Windows;
+    exe.subsystem = .windows;
 
-    exe.linkSystemLibrary("user32");
-    exe.linkSystemLibrary("gdi32");
-    exe.linkSystemLibrary("comdlg32");
-    exe.linkSystemLibrary("shcore");
+    const mod = exe.root_module;
+    mod.linkSystemLibrary("user32", .{});
+    mod.linkSystemLibrary("gdi32", .{});
+    mod.linkSystemLibrary("comdlg32", .{});
+    mod.linkSystemLibrary("shcore", .{});
 
     b.installArtifact(exe);
 

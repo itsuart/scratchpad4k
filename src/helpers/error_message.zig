@@ -13,7 +13,7 @@ const FORMAT_MESSAGE_IGNORE_INSERTS = 0x00000200;
 /// The caller owns the returned slice.
 pub fn getErrorMessageW(allocator: std.mem.Allocator, error_code: win.Win32Error) ![]u16 {
     var buffer: [512]u16 = std.mem.zeroes([512]u16);
-    const copied = win.kernel32.FormatMessageW(
+    const copied = win32.FormatMessageW(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         null,
         error_code,

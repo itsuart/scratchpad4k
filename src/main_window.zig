@@ -163,13 +163,13 @@ fn getWindowTextAlloc(allocator: std.mem.Allocator, h_edit: win32.HWND) ![]u16 {
 
 fn centerWindow(hwnd: win32.HWND) void {
     var window_rect: win32.RECT = undefined;
-    if (win32.GetWindowRect(hwnd, &window_rect) == 0) return;
+    if (!win32.GetWindowRect(hwnd, &window_rect).toBool()) return;
 
     const h_monitor = win32.MonitorFromWindow(hwnd, win32.MONITOR_DEFAULTTONULL) orelse return;
 
     var monitor_info: win32.MONITORINFO = undefined;
     monitor_info.cbSize = @sizeOf(win32.MONITORINFO);
-    if (win32.GetMonitorInfoW(h_monitor, &monitor_info) == 0) return;
+    if (!win32.GetMonitorInfoW(h_monitor, &monitor_info).toBool()) return;
 
     const monitor_width: i64 = monitor_info.rcWork.right - monitor_info.rcWork.left;
     const window_width: i64 = window_rect.right - window_rect.left;
@@ -202,7 +202,7 @@ fn centerWindow(hwnd: win32.HWND) void {
 
 fn writeToFile(handle: win.HANDLE, data: []const u8) bool {
     var bytes_written: win.DWORD = 0;
-    return win.kernel32.WriteFile(handle, data.ptr, @intCast(data.len), &bytes_written, null) != 0;
+    return win32.WriteFile(handle, data.ptr, @intCast(data.len), &bytes_written, null).toBool();
 }
 
 /// Creates the UI font: the menu font scaled to the given DPI. If the system
@@ -215,7 +215,7 @@ fn createFont(dpi: u32) win32.HFONT {
 
     var metrics = std.mem.zeroes(win32.NONCLIENTMETRICSW);
     metrics.cbSize = @sizeOf(win32.NONCLIENTMETRICSW);
-    if (win32.SystemParametersInfoForDpi(win32.SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0, dpi) != 0) {
+    if (win32.SystemParametersInfoForDpi(win32.SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0, dpi).toBool()) {
         got_metrics = metrics.lfMenuFont.lfFaceName[0] != 0;
     }
     if (!got_metrics) {
@@ -223,7 +223,7 @@ fn createFont(dpi: u32) win32.HFONT {
         // only lfHeight is DPI-dependent and we override it below anyway).
         metrics = std.mem.zeroes(win32.NONCLIENTMETRICSW);
         metrics.cbSize = @sizeOf(win32.NONCLIENTMETRICSW);
-        if (win32.SystemParametersInfoW(win32.SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0) != 0) {
+        if (win32.SystemParametersInfoW(win32.SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0).toBool()) {
             got_metrics = metrics.lfMenuFont.lfFaceName[0] != 0;
         }
     }
@@ -295,7 +295,7 @@ pub const MainWindow = struct {
             if (win32.RegisterClassExW(&wcex) == 0) {
                 // The C++ code ignored registration failures; keep doing the same,
                 // but remember the code in case window creation then fails.
-                last_init_error = win.kernel32.GetLastError();
+                last_init_error = win.GetLastError();
                 std.debug.print("RegisterClassExW failed with error code {}\n", .{last_init_error.?});
             }
         }
@@ -319,7 +319,7 @@ pub const MainWindow = struct {
             h_instance,
             null,
         ) orelse {
-            last_init_error = win.kernel32.GetLastError();
+            last_init_error = win.GetLastError();
             std.debug.print("CreateWindowExW failed with error code {}\n", .{last_init_error.?});
             return error.FailedToCreateMainWindow;
         };
@@ -487,7 +487,7 @@ pub const MainWindow = struct {
         const STATS_CONTROL_VERTICAL_SPACE: u32 = 24;
 
         var client_rect: win32.RECT = undefined;
-        if (win32.GetClientRect(self.main_wnd, &client_rect) == 0) return;
+        if (!win32.GetClientRect(self.main_wnd, &client_rect).toBool()) return;
 
         const effective_stats_vertical_space: c_long = @intCast(self.toDpiAwarePixels(STATS_CONTROL_VERTICAL_SPACE));
 
@@ -497,7 +497,7 @@ pub const MainWindow = struct {
             TOP_PADDING,
             client_rect.right - (LEFT_PADDING + RIGHT_PADDING),
             client_rect.bottom - client_rect.top - (TOP_PADDING + BOTTOM_PADDING) - effective_stats_vertical_space,
-            0, // bRepaint
+            win.BOOL.FALSE, // bRepaint
         );
         _ = win32.MoveWindow(
             self.stats_edit_wnd,
@@ -505,7 +505,7 @@ pub const MainWindow = struct {
             TOP_PADDING + (client_rect.bottom - client_rect.top) - effective_stats_vertical_space,
             client_rect.right - (LEFT_PADDING + RIGHT_PADDING),
             effective_stats_vertical_space,
-            0,
+            win.BOOL.FALSE,
         );
     }
 
@@ -593,7 +593,7 @@ pub const MainWindow = struct {
         save_file_dialog_settings.nMaxFile = @intCast(buffer.len);
         save_file_dialog_settings.Flags = win32.OFN_DONTADDTORECENT | win32.OFN_FORCESHOWHIDDEN | win32.OFN_LONGNAMES | win32.OFN_NOTESTFILECREATE;
 
-        if (win32.GetSaveFileNameW(&save_file_dialog_settings) == 0) {
+        if (!win32.GetSaveFileNameW(&save_file_dialog_settings).toBool()) {
             const err = win32.CommDlgExtendedError();
             if (err == 0) return; // the user cancelled the dialog
 
@@ -626,17 +626,17 @@ pub const MainWindow = struct {
             path_len += EXTENDED_LENGTH_PREFIX.len;
         }
 
-        const h_file = win.kernel32.CreateFileW(
+        const h_file = win32.CreateFileW(
             @ptrCast(buffer.ptr),
-            win.GENERIC_WRITE,
-            win.FILE_SHARE_READ,
+            win32.GENERIC_WRITE,
+            win32.FILE_SHARE_READ,
             null,
-            win.CREATE_ALWAYS,
-            win.FILE_ATTRIBUTE_NORMAL,
+            win32.CREATE_ALWAYS,
+            win32.FILE_ATTRIBUTE_NORMAL,
             null,
         );
         if (h_file == win.INVALID_HANDLE_VALUE) {
-            const last_error = win.kernel32.GetLastError();
+            const last_error = win.GetLastError();
             try showFileError(allocator, self.main_wnd, "::CreateFileW() failed", last_error);
             return;
         }
@@ -646,7 +646,7 @@ pub const MainWindow = struct {
         defer allocator.free(content_in_utf8);
 
         if (!writeToFile(h_file, content_in_utf8)) {
-            const last_error = win.kernel32.GetLastError();
+            const last_error = win.GetLastError();
             try showFileError(allocator, self.main_wnd, "::WriteFile() failed", last_error);
             return;
         }
