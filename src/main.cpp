@@ -3,9 +3,6 @@
 #include "./window_msg_dispatcher.h"
 #include "./main_window.h"
 
-#include <vector>
-#include <cassert>
-
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR /*lpCmdLine*/, int /*nCmdShow*/){
     ::SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
