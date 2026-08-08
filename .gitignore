@@ -1,5 +1,7 @@
 .vs/
 out/
+.zig-cache/
+zig-out/
 
 # Prerequisites
 *.d
