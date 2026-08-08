@@ -108,7 +108,7 @@ namespace {
             _cb();
         }
     private:
-        T&& _cb;
+        T _cb;
     };
 
     constexpr std::uint32_t DEFAULT_NON_SCALED_DPI = 96;
@@ -182,33 +182,6 @@ namespace {
                 }
             }
         }
-    }
-
-    template<typename T>
-    std::vector<std::basic_string<T>> split(const std::basic_string<T>& input, T separator, bool ignoreEmptyParts = false) {
-        using string = std::basic_string<T>;
-        std::vector<string> result;
-
-        string buffer;
-        for (T current : input) {
-            if (current == separator) {
-                if (ignoreEmptyParts and buffer.empty()) {
-                    continue;
-                }
-                result.push_back(buffer);
-                buffer.clear();
-            } else {
-                buffer.push_back(std::move(current));
-            }
-        }
-
-        if (ignoreEmptyParts and buffer.empty()) {
-            // do nothing
-        }
-        else {
-            result.push_back(buffer);
-        }
-        return result;
     }
 
     BOOL write_to_file(HANDLE handle, const void* data, std::size_t sizeOfData) {
@@ -285,10 +258,11 @@ namespace w {
 
     void MainWindow::create_subcontrols() {
         m_contentEditWnd =
-            ::CreateWindowW(
+            ::CreateWindowExW(
+                WS_EX_CLIENTEDGE,
                 L"edit",
                 nullptr,
-                WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_EX_CLIENTEDGE | ES_MULTILINE,
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE,
                 0, 0,
                 to_dpi_aware_pixels(100), to_dpi_aware_pixels(200),
                 m_mainWnd,
@@ -298,10 +272,11 @@ namespace w {
             );
         assert(m_contentEditWnd);
 
-        m_statsEditWnd = ::CreateWindowW(
+        m_statsEditWnd = ::CreateWindowExW(
+            WS_EX_CLIENTEDGE,
             L"edit", 
             nullptr, 
-            WS_CHILD | WS_VISIBLE | WS_EX_CLIENTEDGE | ES_READONLY,
+            WS_CHILD | WS_VISIBLE | ES_READONLY,
             0, 0, 
             to_dpi_aware_pixels(100), to_dpi_aware_pixels(16), 
             m_mainWnd, 
@@ -400,7 +375,6 @@ namespace w {
         saveFileDialogSettings.hwndOwner = m_mainWnd;
         saveFileDialogSettings.lpstrFile = buffer.data();
         saveFileDialogSettings.nMaxFile = buffer.size();
-        saveFileDialogSettings.lpstrFileTitle;
         saveFileDialogSettings.Flags = OFN_DONTADDTORECENT | OFN_FORCESHOWHIDDEN | OFN_LONGNAMES | OFN_NOTESTFILECREATE;
 
         if (not ::GetSaveFileNameW(&saveFileDialogSettings)) {
@@ -440,6 +414,7 @@ namespace w {
             const DWORD lastError = ::GetLastError();
             const auto errorDescription = helpers::get_error_message_w(lastError);
             const std::wstring errorMessage = std::format(L"{}(error code = {})", errorDescription.get(), lastError);
+            ::MessageBoxW(m_mainWnd, errorMessage.c_str(), L"::CreateFileW() failed", MB_OK | MB_ICONERROR);
             return;
         }
 
@@ -456,6 +431,7 @@ namespace w {
             const DWORD lastError = ::GetLastError();
             const auto errorDescription = helpers::get_error_message_w(lastError);
             const std::wstring errorMessage = std::format(L"{}(error code = {})", errorDescription.get(), lastError);
+            ::MessageBoxW(m_mainWnd, errorMessage.c_str(), L"::WriteFile() failed", MB_OK | MB_ICONERROR);
             return;
         }
 
@@ -478,7 +454,7 @@ namespace w {
 
         const std::size_t contentSize = m_bufferForContent.size();
         {
-            std:size_t offset{ 0 };
+            std::size_t offset{ 0 };
             for (wchar_t c : m_bufferForContent) {
                 if (c == L'\n' or c == L'\r') {
                     m_bufferForContent.erase(offset);
