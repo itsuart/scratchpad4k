@@ -520,6 +520,10 @@ pub const MainWindow = struct {
 
         if (self.buffer_for_content.items.len == 0) {
             _ = win32.SetWindowTextW(self.main_wnd, APP_NAME_EMPTY);
+            // The stats bar would otherwise keep showing the previous numbers.
+            self.buffer_for_stats.clearRetainingCapacity();
+            try self.buffer_for_stats.append(self.allocator, 0);
+            _ = win32.SetWindowTextW(self.stats_edit_wnd, @ptrCast(self.buffer_for_stats.items.ptr));
             return;
         }
 
