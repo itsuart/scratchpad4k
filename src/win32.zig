@@ -225,6 +225,7 @@ pub extern "user32" fn SystemParametersInfoForDpi(uiAction: UINT, uiParam: UINT,
 // ---------------------------------------------------------------- gdi32
 
 pub extern "gdi32" fn CreateFontIndirectW(lplf: *const LOGFONTW) callconv(.winapi) ?HFONT;
+pub extern "gdi32" fn DeleteObject(hObject: *anyopaque) callconv(.winapi) BOOL;
 
 // ---------------------------------------------------------------- comdlg32
 

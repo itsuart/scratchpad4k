@@ -267,6 +267,9 @@ pub const MainWindow = struct {
 
     dpi: u32,
 
+    /// Current UI font (recreated when the DPI changes).
+    font: ?win32.HFONT = null,
+
     buffer_for_content: std.ArrayListUnmanaged(u16) = .empty,
     buffer_for_stats: std.ArrayListUnmanaged(u16) = .empty,
 
@@ -334,6 +337,7 @@ pub const MainWindow = struct {
     }
 
     pub fn deinit(self: *MainWindow) void {
+        if (self.font) |font| _ = win32.DeleteObject(font);
         self.buffer_for_content.deinit(self.allocator);
         self.buffer_for_stats.deinit(self.allocator);
     }
@@ -475,6 +479,7 @@ pub const MainWindow = struct {
         ) orelse return error.FailedToCreateStatsEdit;
 
         const h_font = createFont(self.dpi);
+        self.font = h_font;
         _ = win32.SendMessageW(self.content_edit_wnd, win32.WM_SETFONT, @intFromPtr(h_font), 0);
         _ = win32.SendMessageW(self.stats_edit_wnd, win32.WM_SETFONT, @intFromPtr(h_font), 0);
     }
@@ -544,6 +549,15 @@ pub const MainWindow = struct {
 
     fn onDpiChanged(self: *MainWindow, new_dpi: u32, suggested_new_rect: *const win32.RECT) void {
         self.dpi = new_dpi;
+
+        // The controls would keep rendering at the old font size; recreate the
+        // font at the new DPI and redraw before resizing the window.
+        const new_font = createFont(new_dpi);
+        _ = win32.SendMessageW(self.content_edit_wnd, win32.WM_SETFONT, @intFromPtr(new_font), 1);
+        _ = win32.SendMessageW(self.stats_edit_wnd, win32.WM_SETFONT, @intFromPtr(new_font), 1);
+        if (self.font) |old_font| _ = win32.DeleteObject(old_font);
+        self.font = new_font;
+
         _ = win32.SetWindowPos(
             self.main_wnd,
             null,
