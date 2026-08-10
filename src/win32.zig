@@ -86,6 +86,21 @@ pub const MONITORINFO = extern struct {
     dwFlags: DWORD,
 };
 
+pub const CREATESTRUCTW = extern struct {
+    lpCreateParams: ?*anyopaque,
+    hInstance: HINSTANCE,
+    hMenu: ?HMENU,
+    hwndParent: ?HWND,
+    cy: c_int,
+    cx: c_int,
+    y: c_int,
+    x: c_int,
+    style: c_long,
+    lpszName: ?LPCWSTR,
+    lpszClass: ?LPCWSTR,
+    dwExStyle: DWORD,
+};
+
 pub const LOGFONTW = extern struct {
     lfHeight: c_long,
     lfWidth: c_long,
@@ -207,6 +222,8 @@ pub extern "user32" fn SendMessageW(hWnd: HWND, msg: UINT, wParam: WPARAM, lPara
 pub extern "user32" fn SetWindowTextW(hWnd: HWND, lpString: LPCWSTR) callconv(.winapi) BOOL;
 pub extern "user32" fn SetFocus(hWnd: ?HWND) callconv(.winapi) ?HWND;
 pub extern "user32" fn GetFocus() callconv(.winapi) ?HWND;
+pub extern "user32" fn GetWindowLongPtrW(hWnd: HWND, nIndex: c_int) callconv(.winapi) isize;
+pub extern "user32" fn SetWindowLongPtrW(hWnd: HWND, nIndex: c_int, dwNewLong: isize) callconv(.winapi) isize;
 pub extern "user32" fn GetKeyState(nVirtKey: c_int) callconv(.winapi) c_short;
 pub extern "user32" fn GetClientRect(hWnd: HWND, lpRect: *RECT) callconv(.winapi) BOOL;
 pub extern "user32" fn GetWindowRect(hWnd: HWND, lpRect: *RECT) callconv(.winapi) BOOL;
@@ -268,6 +285,7 @@ pub const MONITOR_DEFAULTTONULL = 0;
 // window messages
 pub const WM_GETTEXT = 0x000D;
 pub const WM_GETTEXTLENGTH = 0x000E;
+pub const WM_NCCREATE = 0x0081;
 pub const WM_CLOSE = 0x0010;
 pub const WM_SETFONT = 0x0030;
 pub const WM_KEYDOWN = 0x0100;
@@ -283,6 +301,9 @@ pub const EM_SETSEL = 0x00B1;
 pub const EN_UPDATE = 0x0400;
 
 pub const WA_INACTIVE = 0;
+
+// window long offsets
+pub const GWLP_USERDATA = -21;
 
 // virtual key codes
 pub const VK_TAB = 0x09;

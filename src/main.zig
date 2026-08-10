@@ -4,7 +4,6 @@ const std = @import("std");
 const win = std.os.windows;
 const win32 = @import("win32.zig");
 const error_message = @import("helpers/error_message.zig");
-const WindowMsgDispatcher = @import("window_msg_dispatcher.zig").WindowMsgDispatcher;
 const main_window_module = @import("main_window.zig");
 const MainWindow = main_window_module.MainWindow;
 
@@ -24,12 +23,8 @@ pub export fn wWinMain(
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var dispatcher: WindowMsgDispatcher = undefined;
-    dispatcher.init(allocator) catch |err| return failStartup(allocator, err);
-    defer dispatcher.deinit();
-
     var main_window: MainWindow = undefined;
-    main_window.init(allocator, &dispatcher, h_instance) catch |err| return failStartup(allocator, err);
+    main_window.init(allocator, h_instance) catch |err| return failStartup(allocator, err);
     defer main_window.deinit();
 
     var msg: win32.MSG = undefined;

@@ -5,8 +5,6 @@ const win = std.os.windows;
 const win32 = @import("win32.zig");
 const string_conversions = @import("helpers/string_conversions.zig");
 const error_message = @import("helpers/error_message.zig");
-const WindowMsgDispatcher = @import("window_msg_dispatcher.zig").WindowMsgDispatcher;
-const WindowMsgProcessor = @import("window_msg_dispatcher.zig").WindowMsgProcessor;
 
 const WND_CLASS_NAME = std.unicode.utf8ToUtf16LeStringLiteral("scratchpad4k-main");
 const APP_NAME = std.unicode.utf8ToUtf16LeStringLiteral("Scratchpad4k");
@@ -257,7 +255,6 @@ fn showFileError(allocator: std.mem.Allocator, parent: win32.HWND, comptime capt
 // ---------------------------------------------------------------- MainWindow
 
 pub const MainWindow = struct {
-    dispatcher: *WindowMsgDispatcher,
     h_instance: win.HINSTANCE,
     allocator: std.mem.Allocator,
 
@@ -273,9 +270,8 @@ pub const MainWindow = struct {
     buffer_for_content: std.ArrayListUnmanaged(u16) = .empty,
     buffer_for_stats: std.ArrayListUnmanaged(u16) = .empty,
 
-    pub fn init(self: *MainWindow, allocator: std.mem.Allocator, dispatcher: *WindowMsgDispatcher, h_instance: win.HINSTANCE) !void {
+    pub fn init(self: *MainWindow, allocator: std.mem.Allocator, h_instance: win.HINSTANCE) !void {
         self.* = .{
-            .dispatcher = dispatcher,
             .h_instance = h_instance,
             .allocator = allocator,
             .dpi = win32.GetDpiForSystem(),
@@ -285,7 +281,7 @@ pub const MainWindow = struct {
             var wcex = std.mem.zeroes(win32.WNDCLASSEXW);
             wcex.cbSize = @sizeOf(win32.WNDCLASSEXW);
             wcex.style = win32.CS_HREDRAW | win32.CS_VREDRAW;
-            wcex.lpfnWndProc = WindowMsgDispatcher.dispatchingProc;
+            wcex.lpfnWndProc = mainWndProc;
             wcex.cbClsExtra = 0;
             wcex.cbWndExtra = 0;
             wcex.hInstance = h_instance;
@@ -303,8 +299,6 @@ pub const MainWindow = struct {
             }
         }
 
-        try dispatcher.bindToNextNewWindow(WindowMsgProcessor.init(MainWindow, self));
-
         const initial_width: u32 = 800;
         const initial_height: u32 = 600;
 
@@ -320,7 +314,7 @@ pub const MainWindow = struct {
             null,
             null,
             h_instance,
-            null,
+            self, // picked up in WM_NCCREATE and stored in GWLP_USERDATA
         ) orelse {
             last_init_error = win.GetLastError();
             std.debug.print("CreateWindowExW failed with error code {}\n", .{last_init_error.?});
@@ -340,6 +334,24 @@ pub const MainWindow = struct {
         if (self.font) |font| _ = win32.DeleteObject(font);
         self.buffer_for_content.deinit(self.allocator);
         self.buffer_for_stats.deinit(self.allocator);
+    }
+
+    /// Window procedure for the main window. The `MainWindow` instance is
+    /// stashed in `GWLP_USERDATA` when the window is created (WM_NCCREATE).
+    fn mainWndProc(hwnd: win32.HWND, message: win32.UINT, wparam: win32.WPARAM, lparam: win32.LPARAM) callconv(.winapi) win32.LRESULT {
+        if (message == win32.WM_NCCREATE) {
+            // First message; arrives before CreateWindowExW returns.
+            const create_struct: *const win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            if (create_struct.lpCreateParams) |params| {
+                _ = win32.SetWindowLongPtrW(hwnd, win32.GWLP_USERDATA, @bitCast(@intFromPtr(params)));
+                return 1; // TRUE: accept window creation
+            }
+        }
+
+        const user_data = win32.GetWindowLongPtrW(hwnd, win32.GWLP_USERDATA);
+        if (user_data == 0) return win32.DefWindowProcW(hwnd, message, wparam, lparam);
+        const self: *MainWindow = @ptrFromInt(@as(usize, @bitCast(user_data)));
+        return self.processMessage(hwnd, message, wparam, lparam);
     }
 
     /// Returns true if the message was handled and need not be dispatched.
