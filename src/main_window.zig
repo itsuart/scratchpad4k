@@ -344,8 +344,9 @@ pub const MainWindow = struct {
             const create_struct: *const win32.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lparam)));
             if (create_struct.lpCreateParams) |params| {
                 _ = win32.SetWindowLongPtrW(hwnd, win32.GWLP_USERDATA, @bitCast(@intFromPtr(params)));
-                return 1; // TRUE: accept window creation
             }
+            // Fall through: DefWindowProcW is what applies the caption from
+            // CREATESTRUCT.lpszName, so WM_NCCREATE must reach it.
         }
 
         const user_data = win32.GetWindowLongPtrW(hwnd, win32.GWLP_USERDATA);
