@@ -12,7 +12,7 @@ pub export fn wWinMain(
     h_instance: win.HINSTANCE,
     h_prev_instance: ?win.HINSTANCE,
     lp_cmd_line: [*:0]u16,
-    n_cmd_show: u16,
+    n_cmd_show: c_int,
 ) callconv(.winapi) win.INT {
     _ = h_prev_instance;
     _ = lp_cmd_line;
