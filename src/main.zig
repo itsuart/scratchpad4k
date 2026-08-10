@@ -33,7 +33,11 @@ pub export fn wWinMain(
     defer main_window.deinit();
 
     var msg: win32.MSG = undefined;
-    while (win32.GetMessageW(&msg, null, 0, 0).toBool()) {
+    while (true) {
+        const get_message_result = win32.GetMessageW(&msg, null, 0, 0);
+        if (get_message_result == .FALSE) break; // WM_QUIT
+        if (@intFromEnum(get_message_result) == -1) return 1; // error retrieving a message
+
         if (main_window.previewMessage(&msg)) continue;
         _ = win32.TranslateMessage(&msg);
         _ = win32.DispatchMessageW(&msg);
