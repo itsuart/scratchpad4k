@@ -19,9 +19,9 @@ pub export fn wWinMain(
 
     _ = win32.SetProcessDpiAwareness(win32.PROCESS_PER_MONITOR_DPI_AWARE);
 
-    var gpa = std.heap.DebugAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    // The app makes a handful of small, infrequent allocations (edit text,
+    // save buffer, error strings); the smallest allocator is plenty.
+    const allocator = std.heap.page_allocator;
 
     var main_window: MainWindow = undefined;
     main_window.init(allocator, h_instance) catch |err| return failStartup(allocator, err);
@@ -42,13 +42,14 @@ pub export fn wWinMain(
 }
 
 fn failStartup(allocator: std.mem.Allocator, err: anyerror) win.INT {
+    _ = allocator; // the message box uses a fixed stack buffer now
     if (main_window_module.last_init_error) |code| {
-        error_message.showErrorMessageBox(allocator, null, "scratchpad4k", "Failed to start: {s} (GetLastError = {})", .{
+        error_message.showErrorMessageBox(null, "scratchpad4k", "Failed to start: {s} (GetLastError = {})", .{
             @errorName(err),
-            code,
+            @intFromEnum(code),
         }) catch {};
     } else {
-        error_message.showErrorMessageBox(allocator, null, "scratchpad4k", "Failed to start: {s}", .{@errorName(err)}) catch {};
+        error_message.showErrorMessageBox(null, "scratchpad4k", "Failed to start: {s}", .{@errorName(err)}) catch {};
     }
     return 1;
 }

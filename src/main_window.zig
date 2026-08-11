@@ -103,20 +103,18 @@ const Statistics = struct {
             return;
         }
 
-        const formatted = try std.fmt.allocPrint(
-            allocator,
-            "Avg={} +-{}, Min={}, Max={}, Sum={}, nNumbers={}",
-            .{
-                self.average,
-                self.max_deviation,
-                self.min,
-                self.max,
-                self.sum,
-                self.n_numbers,
-            },
-        );
-        defer allocator.free(formatted);
-        try appendAsciiUtf16(buffer, allocator, formatted);
+        try appendAsciiUtf16(buffer, allocator, "Avg=");
+        try appendDecimalUtf16(buffer, allocator, self.average);
+        try appendAsciiUtf16(buffer, allocator, " +-");
+        try appendDecimalUtf16(buffer, allocator, self.max_deviation);
+        try appendAsciiUtf16(buffer, allocator, ", Min=");
+        try appendDecimalUtf16(buffer, allocator, self.min);
+        try appendAsciiUtf16(buffer, allocator, ", Max=");
+        try appendDecimalUtf16(buffer, allocator, self.max);
+        try appendAsciiUtf16(buffer, allocator, ", Sum=");
+        try appendDecimalUtf16(buffer, allocator, self.sum);
+        try appendAsciiUtf16(buffer, allocator, ", nNumbers=");
+        try appendDecimalUtf16(buffer, allocator, self.n_numbers);
     }
 };
 
@@ -126,6 +124,24 @@ const Statistics = struct {
 fn appendAsciiUtf16(buffer: *std.ArrayListUnmanaged(u16), allocator: std.mem.Allocator, ascii: []const u8) !void {
     try buffer.ensureUnusedCapacity(allocator, ascii.len);
     for (ascii) |ch| buffer.appendAssumeCapacity(ch);
+}
+
+/// Appends an unsigned integer in decimal into a UTF-16 buffer.
+fn appendDecimalUtf16(buffer: *std.ArrayListUnmanaged(u16), allocator: std.mem.Allocator, value: anytype) !void {
+    var v: u64 = value;
+    var tmp: [20]u8 = undefined; // u64 max is 20 digits
+    var n: usize = 0;
+    while (true) {
+        tmp[n] = @intCast('0' + v % 10);
+        n += 1;
+        v /= 10;
+        if (v == 0) break;
+    }
+    try buffer.ensureUnusedCapacity(allocator, n);
+    while (n > 0) {
+        n -= 1;
+        buffer.appendAssumeCapacity(tmp[n]);
+    }
 }
 
 fn isButtonDown(virtual_key: c_int) bool {
@@ -237,7 +253,7 @@ fn createFont(dpi: u32) win32.HFONT {
     // For some reason fonts are scaled with 72 ppi as the default.
     logfont.lfHeight = @divTrunc(16 * @as(c_long, @intCast(dpi)), 72);
     return win32.CreateFontIndirectW(&logfont) orelse
-        std.debug.panic("CreateFontIndirectW() failed", .{});
+        @panic("CreateFontIndirectW() failed");
 }
 
 /// Shows "<system message>(error code = <code>)" for a failed Win32 call.
@@ -246,9 +262,9 @@ fn showFileError(allocator: std.mem.Allocator, parent: win32.HWND, comptime capt
     defer allocator.free(error_description);
     const error_description_utf8 = try string_conversions.toUtf8(allocator, error_description);
     defer allocator.free(error_description_utf8);
-    try error_message.showErrorMessageBox(allocator, parent, caption, "{s}(error code = {})", .{
+    try error_message.showErrorMessageBox(parent, caption, "{s}(error code = {})", .{
         error_description_utf8,
-        last_error,
+        @intFromEnum(last_error),
     });
 }
 
@@ -295,7 +311,6 @@ pub const MainWindow = struct {
                 // The C++ code ignored registration failures; keep doing the same,
                 // but remember the code in case window creation then fails.
                 last_init_error = win.GetLastError();
-                std.debug.print("RegisterClassExW failed with error code {}\n", .{last_init_error.?});
             }
         }
 
@@ -317,7 +332,6 @@ pub const MainWindow = struct {
             self, // picked up in WM_NCCREATE and stored in GWLP_USERDATA
         ) orelse {
             last_init_error = win.GetLastError();
-            std.debug.print("CreateWindowExW failed with error code {}\n", .{last_init_error.?});
             return error.FailedToCreateMainWindow;
         };
 
@@ -386,9 +400,7 @@ pub const MainWindow = struct {
         if (isButtonDown(win32.VK_CONTROL)) {
             if (wparam == 'S') {
                 if (message == win32.WM_KEYUP) {
-                    self.onSaveContentCommand() catch |err| {
-                        std.debug.panic("onSaveContentCommand failed: {s}", .{@errorName(err)});
-                    };
+                    self.onSaveContentCommand() catch @panic("onSaveContentCommand failed");
                     return true;
                 } else { // WM_KEYDOWN
                     return true;
@@ -446,9 +458,7 @@ pub const MainWindow = struct {
             win32.WM_COMMAND => {
                 if (lparam == @as(win32.LPARAM, @bitCast(@intFromPtr(self.content_edit_wnd)))) {
                     if (win32.hiword(wparam) == win32.EN_UPDATE) {
-                        self.onContentChanged() catch |err| {
-                            std.debug.panic("onContentChanged failed: {s}", .{@errorName(err)});
-                        };
+                        self.onContentChanged() catch @panic("onContentChanged failed");
                         return MESSAGE_PROCESSED;
                     }
                 }
@@ -557,9 +567,9 @@ pub const MainWindow = struct {
             }
         }
 
-        const title = try std.fmt.allocPrint(self.allocator, " -- Scratchpad4k ({} wchars)", .{content_size});
-        defer self.allocator.free(title);
-        try appendAsciiUtf16(&self.buffer_for_content, self.allocator, title);
+        try appendAsciiUtf16(&self.buffer_for_content, self.allocator, " -- Scratchpad4k (");
+        try appendDecimalUtf16(&self.buffer_for_content, self.allocator, content_size);
+        try appendAsciiUtf16(&self.buffer_for_content, self.allocator, " wchars)");
         try self.buffer_for_content.append(self.allocator, 0);
         _ = win32.SetWindowTextW(self.main_wnd, @ptrCast(self.buffer_for_content.items.ptr));
     }
@@ -628,13 +638,7 @@ pub const MainWindow = struct {
             const err = win32.CommDlgExtendedError();
             if (err == 0) return; // the user cancelled the dialog
 
-            try error_message.showErrorMessageBox(
-                allocator,
-                self.main_wnd,
-                "::GetSaveFileNameW() failed",
-                "Extended error code : {}.",
-                .{err},
-            );
+            try error_message.showErrorMessageBox(self.main_wnd, "::GetSaveFileNameW() failed", "Extended error code : {}.", .{err});
             return;
         }
 

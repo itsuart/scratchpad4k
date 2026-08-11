@@ -41,6 +41,9 @@ pub const FILE_SHARE_READ = 0x00000001;
 pub const CREATE_ALWAYS = 2;
 pub const FILE_ATTRIBUTE_NORMAL = 0x80;
 
+// code pages
+pub const CP_UTF8 = 65001;
+
 // ---------------------------------------------------------------- handles
 
 pub const HICON = *opaque {};
@@ -194,6 +197,26 @@ pub extern "kernel32" fn FormatMessageW(
     nSize: DWORD,
     arguments: ?*anyopaque,
 ) callconv(.winapi) DWORD;
+
+pub extern "kernel32" fn MultiByteToWideChar(
+    codePage: u32,
+    dwFlags: u32,
+    lpMultiByteStr: [*]const u8,
+    cbMultiByte: c_int,
+    lpWideCharStr: ?[*]u16,
+    cchWideChar: c_int,
+) callconv(.winapi) c_int;
+
+pub extern "kernel32" fn WideCharToMultiByte(
+    codePage: u32,
+    dwFlags: u32,
+    lpWideCharStr: [*]const u16,
+    cchWideChar: c_int,
+    lpMultiByteStr: ?[*]u8,
+    cbMultiByte: c_int,
+    lpDefaultChar: ?[*]const u8,
+    lpUsedDefaultChar: ?*BOOL,
+) callconv(.winapi) c_int;
 
 // ---------------------------------------------------------------- user32
 
