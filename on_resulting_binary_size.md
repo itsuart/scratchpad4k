@@ -71,6 +71,8 @@ content-only size would be on the order of ~100 KiB.
 
 ## Building the smallest variant
 
+The msvc target is the build default (see `build.zig`), so:
+
 ```
-zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-windows-msvc
+zig build -Doptimize=ReleaseSmall
 ```
